@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myagents_frontend/core/crypto/key_pair.dart';
 
@@ -67,7 +68,7 @@ void main() {
       final derivedPublicKey = keyPair.privateKey.publicKey;
       expect(
         keyPair.publicKeyBytes,
-        equals(derivedPublicKey.asTypedList),
+        equals(Uint8List.fromList(derivedPublicKey)),
       );
     });
 

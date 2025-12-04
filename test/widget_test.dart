@@ -12,7 +12,8 @@ void main() {
     await tester.pumpWidget(const MyAgentsApp());
 
     // Verify the app renders with Pairing screen (initial route)
-    expect(find.text('Pairing'), findsOneWidget);
-    expect(find.text('Go to Terminal'), findsOneWidget);
+    // The new PairingScreen shows "Claude Remote Terminal" title and "Connect" button
+    expect(find.text('Claude Remote Terminal'), findsOneWidget);
+    expect(find.text('Connect'), findsOneWidget);
   });
 }
