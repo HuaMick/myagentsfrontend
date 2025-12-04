@@ -1,0 +1,110 @@
+metadata:
+  version: "1.0"
+  last_updated: "2025-12-04"
+  purpose: "User stories for MyAgentsFrontend Flutter application UAT validation"
+  project: "MyAgentsFrontend"
+
+  project_description: |
+    MyAgentsFrontend is a Flutter-based remote terminal frontend for Claude Code.
+    Key features:
+    - Device pairing (QR code / manual code entry)
+    - Secure WebSocket connection with NaCl encryption
+    - Remote terminal interface (xterm.js)
+    - Voice-to-text input (Deepgram integration)
+
+    The app runs on web (primary), mobile (iOS/Android), and desktop platforms.
+
+  testing_approach: |
+    Each user story is tested by a user simulator agent.
+    The agent validates across applicable testing layers:
+
+    1. WEB TESTING (Primary)
+       - Chrome/Edge browser testing
+       - Flutter web build validation
+       - Purpose: Validate primary deployment target
+       - What it catches: Web-specific rendering, WebSocket behavior, browser APIs
+
+    2. WIDGET TESTING
+       - Flutter widget tests
+       - Purpose: Validate UI component behavior
+       - What it catches: Widget rendering, state management, navigation
+
+    3. INTEGRATION TESTING
+       - End-to-end Flutter tests
+       - Purpose: Validate complete user flows
+       - What it catches: Screen transitions, data flow, error handling
+
+    Each user story specifies which layers to test via testing section:
+    - web: true/false
+    - widget_test: true/false
+    - integration_test: true/false
+
+execution_guidance: |
+  When spawning user simulator agents for UAT testing:
+
+  ## CRITICAL: FUNCTIONAL TESTING REQUIRED
+
+  Test agents MUST execute the ACTUAL COMMANDS specified in journey steps.
+  Do NOT substitute functional tests with build-only validation.
+
+  PROHIBITED BEHAVIOR:
+  - Running only `flutter build web` instead of actual UI testing
+  - Reporting "PASS" based on compilation success alone
+  - Summarizing or simplifying functional requirements from user stories
+
+  REQUIRED BEHAVIOR:
+  - Execute each journey step EXACTLY as written
+  - If step says "Navigate to terminal screen", you MUST verify navigation works
+  - Verify ACTUAL outcomes, not just that app builds
+  - Capture screenshots or logs as evidence where applicable
+
+  VALIDATION CHECKLIST (must answer YES to all before reporting PASS):
+  - [ ] Did I execute each journey step as written?
+  - [ ] Did I verify the expected outcomes occurred?
+  - [ ] Did I capture evidence of functionality?
+  - [ ] Did I test error scenarios where specified?
+
+  If ANY answer is NO, the test is INCOMPLETE, not PASS.
+
+  ## Orchestration Agent Instructions
+
+  1. **Environment Preparation (Pre-requisite)**:
+     - Ensure Flutter SDK is available
+     - Run `flutter pub get` to install dependencies
+     - For web testing: Ensure Chrome is available
+     - Build once: `flutter build web`
+
+  2. **One Agent Per User Story**: Each user story gets exactly one user simulator agent.
+
+  3. **Agent Inputs** (what to provide in the prompt):
+     - Project README.md
+     - User story definition (extracted from this file)
+
+  4. **Failure Reporting**: Agent updates live plan with structured failures:
+     - user_story_id: US-XXX-XXX
+     - step: Which step failed
+     - failure_type: "ui_issue", "navigation_error", "unexpected_error", "build_failure"
+     - description: What went wrong
+     - user_impact: How this affects the user persona
+     - recommendation: What should be fixed
+     - tested_environments: ["web", "widget_test", "integration_test"]
+
+flutter_setup: |
+  # Prerequisites
+  flutter --version  # Ensure Flutter 3.0+
+
+  # Install dependencies
+  cd /home/code/myagents/MyAgentsFrontend
+  flutter pub get
+
+  # Build for web
+  flutter build web
+
+  # Run web server for testing
+  flutter run -d chrome --web-port 8080
+
+  # Run widget tests
+  flutter test
+
+  # Run integration tests
+  flutter test integration_test/

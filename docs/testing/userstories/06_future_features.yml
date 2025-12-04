@@ -1,0 +1,233 @@
+user_stories:
+  # ============================================================================
+  # FUTURE FEATURES User Stories (for when features are implemented)
+  # ============================================================================
+  # NOTE: These user stories are placeholders for features planned based on
+  # the pubspec.yaml dependencies. Enable them when features are implemented.
+
+  - id: US-WS-001
+    name: "WebSocket Connection to Claude Code"
+    category: "websocket"
+    persona: "User connecting to remote Claude Code instance"
+    priority: "critical"
+    status: "future"
+
+    dependencies_required:
+      - "web_socket_channel: ^2.4.0"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        paired: true
+        claude_code_running: true
+      knowledge:
+        - "User has valid pairing code"
+        - "Claude Code instance is running and accessible"
+
+    journey:
+      - step: 1
+        action: "Enter pairing code/scan QR code"
+        expected: "WebSocket connection initiated"
+        failure_indicators:
+          - "Connection fails immediately"
+          - "Timeout without feedback"
+          - "No error message on failure"
+
+      - step: 2
+        action: "Wait for connection establishment"
+        expected: "Connection status indicates success"
+        failure_indicators:
+          - "Stuck in connecting state"
+          - "Silent failure"
+          - "No connection indicator"
+
+      - step: 3
+        action: "Observe connected state"
+        expected: "Terminal becomes active, ready for input"
+        failure_indicators:
+          - "Terminal remains inactive"
+          - "Connection drops immediately"
+
+    success_criteria:
+      - "WebSocket connection establishes"
+      - "Connection status is displayed"
+      - "Reconnection on disconnect (if implemented)"
+
+    testing:
+      web: true
+      widget_test: false
+      integration_test: true
+      note: "Requires mock WebSocket server for testing"
+
+    documentation_references:
+      - "lib/features/websocket/ (when created)"
+
+  - id: US-CRYPT-001
+    name: "Encrypted Communication"
+    category: "security"
+    persona: "User expecting secure communication"
+    priority: "critical"
+    status: "future"
+
+    dependencies_required:
+      - "pinenacl: ^0.5.1"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        connected: true
+      knowledge:
+        - "User expects encryption"
+        - "User has established connection"
+
+    journey:
+      - step: 1
+        action: "Send a message through terminal"
+        expected: "Message is encrypted before transmission"
+        failure_indicators:
+          - "Plaintext visible in network tab"
+          - "Encryption errors"
+          - "Message fails to send"
+
+      - step: 2
+        action: "Receive response from Claude Code"
+        expected: "Response is decrypted and displayed correctly"
+        failure_indicators:
+          - "Garbled text displayed"
+          - "Decryption errors"
+          - "Response lost"
+
+    success_criteria:
+      - "All communication encrypted with NaCl"
+      - "Key exchange completed securely"
+      - "No plaintext in transit"
+
+    testing:
+      web: true
+      widget_test: false
+      integration_test: true
+      note: "Verify encryption via network inspection"
+
+    documentation_references:
+      - "lib/features/encryption/ (when created)"
+
+  - id: US-XTERM-001
+    name: "Terminal Input and Output"
+    category: "terminal"
+    persona: "User typing commands in terminal"
+    priority: "critical"
+    status: "future"
+
+    dependencies_required:
+      - "xterm: ^4.0.0"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        connected: true
+        terminal_active: true
+      knowledge:
+        - "User is connected to Claude Code"
+        - "Terminal is ready for input"
+
+    journey:
+      - step: 1
+        action: "Type text into terminal"
+        expected: "Characters appear in terminal as typed"
+        failure_indicators:
+          - "Input not visible"
+          - "Characters doubled"
+          - "Wrong characters"
+          - "Input lag"
+
+      - step: 2
+        action: "Press Enter to submit command"
+        expected: "Command sent to remote, response appears"
+        failure_indicators:
+          - "Enter does nothing"
+          - "No response received"
+          - "Response corrupted"
+
+      - step: 3
+        action: "View terminal output"
+        expected: "Output formatted correctly with colors/styles"
+        failure_indicators:
+          - "ANSI codes visible as text"
+          - "Colors not rendering"
+          - "Layout broken"
+
+    success_criteria:
+      - "Terminal accepts keyboard input"
+      - "Output displays correctly"
+      - "ANSI escape codes rendered"
+      - "Scrolling works"
+
+    testing:
+      web: true
+      widget_test: false
+      integration_test: true
+
+    documentation_references:
+      - "lib/features/remote_terminal/terminal_screen.dart"
+
+  - id: US-VOICE-001
+    name: "Voice Input to Terminal"
+    category: "voice"
+    persona: "User who wants to use voice commands"
+    priority: "medium"
+    status: "future"
+
+    dependencies_required:
+      - "deepgram_speech_to_text: ^2.0.0"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        connected: true
+        microphone_available: true
+      knowledge:
+        - "User has microphone access"
+        - "User wants to speak instead of type"
+
+    journey:
+      - step: 1
+        action: "Activate voice input mode"
+        expected: "Voice recording indicator appears"
+        failure_indicators:
+          - "No voice button"
+          - "Permission denied without prompt"
+          - "Silent failure"
+
+      - step: 2
+        action: "Speak command clearly"
+        expected: "Speech transcribed to text in real-time"
+        failure_indicators:
+          - "No transcription"
+          - "Severely inaccurate transcription"
+          - "Long delay"
+
+      - step: 3
+        action: "Review and submit transcription"
+        expected: "Transcribed text sent as terminal command"
+        failure_indicators:
+          - "Cannot edit before send"
+          - "Wrong text sent"
+
+    success_criteria:
+      - "Microphone access requested properly"
+      - "Speech transcription works"
+      - "Transcription editable before send"
+      - "Clear audio feedback"
+
+    testing:
+      web: true
+      widget_test: false
+      integration_test: true
+      note: "Requires microphone access, may need manual testing"
+
+    documentation_references:
+      - "lib/features/voice/ (when created)"

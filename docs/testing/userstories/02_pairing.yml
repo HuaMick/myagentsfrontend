@@ -1,0 +1,167 @@
+user_stories:
+  # ============================================================================
+  # PAIRING User Stories
+  # ============================================================================
+
+  - id: US-PAIR-001
+    name: "View Pairing Screen"
+    category: "pairing"
+    persona: "User who needs to pair with a Claude Code instance"
+    priority: "critical"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        paired: false
+        current_screen: "pairing"
+      knowledge:
+        - "User knows they need to pair"
+        - "User has Claude Code running on another device"
+
+    journey:
+      - step: 1
+        action: "View the pairing screen"
+        expected: "Pairing screen displays with clear instructions"
+        failure_indicators:
+          - "No instructions visible"
+          - "Confusing UI"
+          - "Missing pairing elements"
+
+      - step: 2
+        action: "Look for pairing method"
+        expected: "Clear path to terminal navigation visible (Go to Terminal button)"
+        failure_indicators:
+          - "No button visible"
+          - "Button not clickable"
+          - "Unclear call-to-action"
+
+      - step: 3
+        action: "Verify screen layout"
+        expected: "Centered content with proper spacing"
+        failure_indicators:
+          - "Content off-center"
+          - "Overlapping elements"
+          - "Poor responsive design"
+
+    success_criteria:
+      - "Pairing screen is accessible"
+      - "UI elements are properly positioned"
+      - "Navigation to terminal is available"
+      - "Screen is responsive"
+
+    testing:
+      web: true
+      widget_test: true
+      integration_test: false
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
+
+  - id: US-PAIR-002
+    name: "Navigate from Pairing to Terminal"
+    category: "pairing"
+    persona: "User who has completed pairing and wants to use terminal"
+    priority: "critical"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        current_screen: "pairing"
+      knowledge:
+        - "User is on pairing screen"
+        - "User wants to access terminal"
+
+    journey:
+      - step: 1
+        action: "Locate the 'Go to Terminal' button"
+        expected: "Button is clearly visible and labeled"
+        failure_indicators:
+          - "Button not found"
+          - "Button text unclear"
+          - "Button disabled when it shouldn't be"
+
+      - step: 2
+        action: "Click/tap the 'Go to Terminal' button"
+        expected: "Navigation to terminal screen occurs"
+        failure_indicators:
+          - "Nothing happens on click"
+          - "Error message appears"
+          - "App crashes"
+          - "Wrong screen loads"
+
+      - step: 3
+        action: "Verify terminal screen loaded"
+        expected: "Terminal screen is displayed with correct title"
+        failure_indicators:
+          - "Still on pairing screen"
+          - "404 or error screen"
+          - "Blank screen"
+
+    success_criteria:
+      - "Button click triggers navigation"
+      - "Terminal screen loads successfully"
+      - "URL updates to /terminal"
+      - "No navigation errors"
+
+    testing:
+      web: true
+      widget_test: true
+      integration_test: true
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
+      - "lib/routing/router.dart"
+
+  - id: US-PAIR-003
+    name: "Pairing Screen Accessibility"
+    category: "pairing"
+    persona: "User with accessibility needs"
+    priority: "medium"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        accessibility_tools: true
+      knowledge:
+        - "User may use screen reader"
+        - "User may use keyboard navigation"
+
+    journey:
+      - step: 1
+        action: "Navigate pairing screen using keyboard only"
+        expected: "All interactive elements reachable via Tab key"
+        failure_indicators:
+          - "Focus not visible"
+          - "Elements unreachable"
+          - "Tab order incorrect"
+
+      - step: 2
+        action: "Activate button using Enter/Space"
+        expected: "Button can be activated without mouse"
+        failure_indicators:
+          - "Keyboard activation fails"
+          - "Wrong element activated"
+
+      - step: 3
+        action: "Check for semantic labels (screen reader)"
+        expected: "Text content is readable and descriptive"
+        failure_indicators:
+          - "Missing labels"
+          - "Unclear descriptions"
+
+    success_criteria:
+      - "Full keyboard navigation works"
+      - "Focus indicators are visible"
+      - "Screen reader compatible"
+      - "WCAG basic compliance"
+
+    testing:
+      web: true
+      widget_test: false
+      integration_test: false
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
