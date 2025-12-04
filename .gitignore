@@ -33,6 +33,10 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Python virtual environment
+.venv/
+venv/
+
 # Symbolication related
 app.*.symbols
 
