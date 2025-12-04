@@ -86,9 +86,14 @@ class MockRelayServer {
       print('MockRelayServer stopping...');
     }
 
-    // Close all client connections
-    for (final ws in _clients.values) {
-      await ws.close(WebSocketStatus.goingAway, 'Server shutting down');
+    // Close all client connections (copy list to avoid concurrent modification)
+    final clientsToClose = List<WebSocket>.from(_clients.values);
+    for (final ws in clientsToClose) {
+      try {
+        await ws.close(WebSocketStatus.goingAway, 'Server shutting down');
+      } catch (_) {
+        // Ignore errors closing already-closed sockets
+      }
     }
     _clients.clear();
     _clientKeys.clear();

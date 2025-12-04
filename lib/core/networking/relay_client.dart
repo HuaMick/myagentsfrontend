@@ -187,14 +187,30 @@ class RelayClient {
 
   /// Builds the WebSocket URL from relay URL and pairing code.
   ///
-  /// Ensures the URL uses wss:// protocol and follows the format:
-  /// wss://{relayUrl}/ws/client/{pairingCode}
+  /// Preserves the protocol if specified, otherwise defaults to wss://.
+  /// Follows the format: {protocol}://{relayUrl}/ws/client/{pairingCode}
+  ///
+  /// For localhost/127.0.0.1 URLs without explicit protocol, uses ws:// (non-SSL)
+  /// to support local testing with MockRelayServer.
   String _buildWebSocketUrl(String relayUrl, String pairingCode) {
-    // Remove any protocol prefix from relayUrl
-    String cleanUrl = relayUrl.replaceAll(RegExp(r'^(wss?://|https?://)'), '');
+    // Check if protocol is already specified
+    final hasProtocol = RegExp(r'^(wss?://|https?://)').hasMatch(relayUrl);
 
-    // Build WebSocket URL
-    return 'wss://$cleanUrl/ws/client/$pairingCode';
+    if (hasProtocol) {
+      // Convert http(s) to ws(s)
+      String cleanUrl = relayUrl
+          .replaceAll(RegExp(r'^https://'), 'wss://')
+          .replaceAll(RegExp(r'^http://'), 'ws://');
+      return '$cleanUrl/ws/client/$pairingCode';
+    }
+
+    // No protocol specified - default based on host
+    // Use ws:// for localhost/127.0.0.1 (testing), wss:// for everything else
+    final isLocalhost = relayUrl.startsWith('localhost') ||
+                        relayUrl.startsWith('127.0.0.1');
+    final protocol = isLocalhost ? 'ws' : 'wss';
+
+    return '$protocol://$relayUrl/ws/client/$pairingCode';
   }
 
   /// Starts listening to WebSocket messages.
@@ -403,12 +419,29 @@ class RelayClient {
   }
 
   /// Internal method to close WebSocket connection.
+  ///
+  /// Uses a timeout to prevent hanging on failed or incomplete connections.
   Future<void> _closeConnection() async {
+    // Cancel subscription first to stop receiving messages
     await _channelSubscription?.cancel();
     _channelSubscription = null;
 
-    await _channel?.sink.close();
-    _channel = null;
+    // Close the channel with a timeout to prevent hanging
+    // on failed or incomplete connections
+    if (_channel != null) {
+      try {
+        await _channel!.sink.close().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            // Timeout expired - connection cleanup incomplete but we proceed
+            // This happens when the connection was never fully established
+          },
+        );
+      } catch (e) {
+        // Ignore errors during close - we're disposing anyway
+      }
+      _channel = null;
+    }
   }
 
   /// Gets a filtered stream of messages by type.
