@@ -3,39 +3,10 @@
 # ==============================================================================
 # Optimized for GCP free tier: 120 build-minutes/day on e2-medium
 # Runs: Lint (flutter analyze) + Unit tests (flutter test)
-# Trigger: Pull Requests to main branch for MyAgentsFrontend-staging/**
+# Trigger: Pull Requests to main branch
 # ==============================================================================
 
 steps:
-  # ==============================================================================
-  # 0. Prepare Workspace
-  # ==============================================================================
-  # Cloud Build clones into /workspace with monorepo structure
-  # We need to restructure for our Dockerfile which expects sibling folders
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        echo "=== Workspace Structure (before) ==="
-        ls -la
-
-        echo "=== Restructuring for Docker build context ==="
-        # Move everything to a temp directory
-        mkdir -p /tmp/workspace_content
-        mv * /tmp/workspace_content/ 2>/dev/null || true
-        mv .* /tmp/workspace_content/ 2>/dev/null || true
-
-        # Create the expected structure: MyAgentsFrontend-staging as a folder
-        mkdir -p MyAgentsFrontend-staging
-        mv /tmp/workspace_content/* MyAgentsFrontend-staging/ 2>/dev/null || true
-        mv /tmp/workspace_content/.* MyAgentsFrontend-staging/ 2>/dev/null || true
-
-        echo "=== Workspace Structure (after) ==="
-        ls -la
-        ls -la MyAgentsFrontend-staging/ | head -20
-    id: 'prepare-workspace'
-
   # ==============================================================================
   # 1. Build Docker Image (with caching)
   # ==============================================================================
@@ -52,11 +23,9 @@ steps:
         docker build \
           -t gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
           --cache-from gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest \
-          --build-arg WORKTREE_NAME=${_WORKTREE_NAME} \
-          -f MyAgentsFrontend-staging/Dockerfile.test \
+          -f Dockerfile.test \
           .
     id: 'build-image'
-    waitFor: ['prepare-workspace']
 
   # ==============================================================================
   # 2. Lint (flutter analyze - fail fast gate)
@@ -69,9 +38,6 @@ steps:
         echo "=== Running Flutter Analyze ==="
         docker run --rm gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
           flutter analyze --no-fatal-infos
-
-        # Exit 0 on info-level issues (avoid_print in tests is acceptable)
-        # Exit non-zero on warnings/errors
     id: 'lint'
     waitFor: ['build-image']
 
@@ -104,7 +70,6 @@ steps:
     waitFor: ['unit-tests']
 
 substitutions:
-  _WORKTREE_NAME: 'MyAgentsFrontend-staging'
   _IMAGE_NAME: 'myagentsfrontend-test'
 
 options:
