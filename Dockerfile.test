@@ -1,0 +1,43 @@
+# Flutter CI Dockerfile for MyAgentsFrontend
+# IMPORTANT: Build from parent directory (/home/code/myagents):
+#   docker build -f MyAgentsFrontend-cicd/Dockerfile.test --build-arg WORKTREE_NAME=MyAgentsFrontend-staging -t myagentsfrontend-test .
+
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
+
+# IMPORTANT: When building, you MUST specify the actual worktree name:
+#   --build-arg WORKTREE_NAME=MyAgentsFrontend-staging
+# The build MUST be run from the parent directory (/home/code/myagents).
+ARG WORKTREE_NAME=MyAgentsFrontend-staging
+
+WORKDIR /workspace/${WORKTREE_NAME}
+
+# Copy pubspec files first for dependency caching
+COPY ${WORKTREE_NAME}/pubspec.yaml ${WORKTREE_NAME}/pubspec.lock ./
+
+# Install dependencies (cached unless pubspec changes)
+RUN flutter pub get
+
+# Copy source code and configuration
+COPY ${WORKTREE_NAME}/lib ./lib
+COPY ${WORKTREE_NAME}/test ./test
+COPY ${WORKTREE_NAME}/web ./web
+COPY ${WORKTREE_NAME}/analysis_options.yaml ./
+
+# Pre-compile for faster test execution
+RUN flutter pub get --offline
+
+# Runtime stage - slim image for test execution
+FROM ghcr.io/cirruslabs/flutter:stable
+
+ARG WORKTREE_NAME=MyAgentsFrontend-staging
+
+WORKDIR /workspace/${WORKTREE_NAME}
+
+# Copy from builder
+COPY --from=builder /workspace/${WORKTREE_NAME} ./
+
+# Verify Flutter installation
+RUN flutter doctor -v
+
+# Default command - run tests
+CMD ["flutter", "test"]

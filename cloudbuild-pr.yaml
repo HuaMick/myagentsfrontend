@@ -1,0 +1,112 @@
+# ==============================================================================
+# Cloud Build - MyAgentsFrontend PR Validation (Free Tier)
+# ==============================================================================
+# Optimized for GCP free tier: 120 build-minutes/day on e2-medium
+# Runs: Lint (flutter analyze) + Unit tests (flutter test)
+# Trigger: Pull Requests to main branch for MyAgentsFrontend-staging/**
+# ==============================================================================
+
+steps:
+  # ==============================================================================
+  # 0. Prepare Workspace
+  # ==============================================================================
+  # Cloud Build clones into /workspace with monorepo structure
+  # We need to restructure for our Dockerfile which expects sibling folders
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Workspace Structure (before) ==="
+        ls -la
+
+        echo "=== Restructuring for Docker build context ==="
+        # Move everything to a temp directory
+        mkdir -p /tmp/workspace_content
+        mv * /tmp/workspace_content/ 2>/dev/null || true
+        mv .* /tmp/workspace_content/ 2>/dev/null || true
+
+        # Create the expected structure: MyAgentsFrontend-staging as a folder
+        mkdir -p MyAgentsFrontend-staging
+        mv /tmp/workspace_content/* MyAgentsFrontend-staging/ 2>/dev/null || true
+        mv /tmp/workspace_content/.* MyAgentsFrontend-staging/ 2>/dev/null || true
+
+        echo "=== Workspace Structure (after) ==="
+        ls -la
+        ls -la MyAgentsFrontend-staging/ | head -20
+    id: 'prepare-workspace'
+
+  # ==============================================================================
+  # 1. Build Docker Image (with caching)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Building Flutter test image ==="
+        # Try to pull cached image
+        docker pull gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest || true
+
+        # Build with cache
+        docker build \
+          -t gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
+          --cache-from gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest \
+          --build-arg WORKTREE_NAME=${_WORKTREE_NAME} \
+          -f MyAgentsFrontend-staging/Dockerfile.test \
+          .
+    id: 'build-image'
+    waitFor: ['prepare-workspace']
+
+  # ==============================================================================
+  # 2. Lint (flutter analyze - fail fast gate)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Running Flutter Analyze ==="
+        docker run --rm gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
+          flutter analyze --no-fatal-infos
+
+        # Exit 0 on info-level issues (avoid_print in tests is acceptable)
+        # Exit non-zero on warnings/errors
+    id: 'lint'
+    waitFor: ['build-image']
+
+  # ==============================================================================
+  # 3. Unit Tests (flutter test)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Running Flutter Tests ==="
+        docker run --rm gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
+          flutter test --reporter expanded
+    id: 'unit-tests'
+    waitFor: ['lint']
+
+  # ==============================================================================
+  # 4. Push cached image (for future builds)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Pushing cached image ==="
+        docker tag gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest
+        docker push gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest || true
+    id: 'push-cache'
+    waitFor: ['unit-tests']
+
+substitutions:
+  _WORKTREE_NAME: 'MyAgentsFrontend-staging'
+  _IMAGE_NAME: 'myagentsfrontend-test'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM  # FREE TIER: 120 min/day
