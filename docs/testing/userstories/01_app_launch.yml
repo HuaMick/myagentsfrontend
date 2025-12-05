@@ -40,7 +40,7 @@ user_stories:
 
       - step: 3
         action: "Verify app title and branding"
-        expected: "App bar shows 'Pairing' title"
+        expected: "App displays 'Claude Remote Terminal' title"
         failure_indicators:
           - "Missing title"
           - "Wrong title"

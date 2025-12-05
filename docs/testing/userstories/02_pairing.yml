@@ -6,7 +6,7 @@ user_stories:
   - id: US-PAIR-001
     name: "View Pairing Screen"
     category: "pairing"
-    persona: "User who needs to pair with a Claude Code instance"
+    persona: "User who needs to connect to a remote session"
     priority: "critical"
 
     starting_state:
@@ -16,39 +16,48 @@ user_stories:
         paired: false
         current_screen: "pairing"
       knowledge:
-        - "User knows they need to pair"
-        - "User has Claude Code running on another device"
+        - "User knows they need to enter a pairing code"
+        - "User has a 6-character pairing code from their remote session"
 
     journey:
       - step: 1
         action: "View the pairing screen"
-        expected: "Pairing screen displays with clear instructions"
+        expected: "Screen displays 'Claude Remote Terminal' title centered at top"
         failure_indicators:
-          - "No instructions visible"
-          - "Confusing UI"
-          - "Missing pairing elements"
+          - "Title missing or incorrect"
+          - "Layout broken"
+          - "Elements not visible"
 
       - step: 2
-        action: "Look for pairing method"
-        expected: "Clear path to terminal navigation visible (Go to Terminal button)"
+        action: "Locate pairing code input field"
+        expected: "Input field is visible with placeholder 'ABC123', centered, with monospace font"
         failure_indicators:
-          - "No button visible"
-          - "Button not clickable"
-          - "Unclear call-to-action"
+          - "Input field not found"
+          - "Input field not styled correctly"
+          - "Placeholder text missing"
 
       - step: 3
-        action: "Verify screen layout"
-        expected: "Centered content with proper spacing"
+        action: "Locate connect button"
+        expected: "Connect button is visible below input field, disabled by default"
         failure_indicators:
-          - "Content off-center"
-          - "Overlapping elements"
-          - "Poor responsive design"
+          - "Button not visible"
+          - "Button enabled when code is empty"
+          - "Button has wrong label"
+
+      - step: 4
+        action: "Observe status area"
+        expected: "Status message area is present below button, initially empty"
+        failure_indicators:
+          - "Status area missing"
+          - "Spurious status messages shown"
+          - "Layout issues"
 
     success_criteria:
-      - "Pairing screen is accessible"
-      - "UI elements are properly positioned"
-      - "Navigation to terminal is available"
-      - "Screen is responsive"
+      - "Pairing screen displays with correct title"
+      - "Input field is properly styled and functional"
+      - "Connect button is visible and properly disabled"
+      - "Status area is present"
+      - "All elements are properly centered and spaced"
 
     testing:
       web: true
@@ -57,11 +66,13 @@ user_stories:
 
     documentation_references:
       - "lib/features/pairing/pairing_screen.dart"
+      - "lib/features/pairing/pairing_controller.dart"
+      - "lib/features/pairing/pairing_state.dart"
 
   - id: US-PAIR-002
-    name: "Navigate from Pairing to Terminal"
+    name: "Connect to Remote Session"
     category: "pairing"
-    persona: "User who has completed pairing and wants to use terminal"
+    persona: "User who wants to establish a connection to their remote session"
     priority: "critical"
 
     starting_state:
@@ -69,41 +80,61 @@ user_stories:
         app_installed: true
         platform: "web"
         current_screen: "pairing"
+        relay_server_available: true
       knowledge:
-        - "User is on pairing screen"
-        - "User wants to access terminal"
+        - "User has a valid 6-character pairing code"
+        - "User is on the pairing screen"
 
     journey:
       - step: 1
-        action: "Locate the 'Go to Terminal' button"
-        expected: "Button is clearly visible and labeled"
+        action: "Enter 6-character pairing code into input field"
+        expected: "Code is displayed in uppercase, input limited to 6 characters, alphanumeric only"
         failure_indicators:
-          - "Button not found"
-          - "Button text unclear"
-          - "Button disabled when it shouldn't be"
+          - "Lowercase characters accepted"
+          - "More than 6 characters allowed"
+          - "Special characters accepted"
+          - "Code not formatted correctly"
 
       - step: 2
-        action: "Click/tap the 'Go to Terminal' button"
-        expected: "Navigation to terminal screen occurs"
+        action: "Observe Connect button state after entering valid code"
+        expected: "Connect button becomes enabled after 6 valid characters entered"
         failure_indicators:
-          - "Nothing happens on click"
-          - "Error message appears"
-          - "App crashes"
-          - "Wrong screen loads"
+          - "Button remains disabled with valid code"
+          - "Button enabled with invalid code"
+          - "Button state doesn't update"
 
       - step: 3
+        action: "Click the Connect button"
+        expected: "Status changes to 'Connecting to session...', button shows loading spinner"
+        failure_indicators:
+          - "Nothing happens on click"
+          - "No status update"
+          - "No loading indicator"
+          - "Button remains clickable during connection"
+
+      - step: 4
+        action: "Wait for successful connection"
+        expected: "Status updates to 'Connected! Redirecting...', then automatically navigates to terminal screen"
+        failure_indicators:
+          - "Stuck in connecting state"
+          - "No navigation occurs"
+          - "Error message shown"
+          - "Connection succeeds but doesn't navigate"
+
+      - step: 5
         action: "Verify terminal screen loaded"
-        expected: "Terminal screen is displayed with correct title"
+        expected: "Terminal screen is displayed, URL changed to /terminal"
         failure_indicators:
           - "Still on pairing screen"
-          - "404 or error screen"
-          - "Blank screen"
+          - "Wrong screen loaded"
+          - "URL didn't update"
 
     success_criteria:
-      - "Button click triggers navigation"
-      - "Terminal screen loads successfully"
-      - "URL updates to /terminal"
-      - "No navigation errors"
+      - "Code input formatting works correctly"
+      - "Connect button enables/disables based on code validity"
+      - "Connection process shows appropriate status messages"
+      - "Successful connection auto-navigates to terminal"
+      - "URL updates correctly"
 
     testing:
       web: true
@@ -112,6 +143,9 @@ user_stories:
 
     documentation_references:
       - "lib/features/pairing/pairing_screen.dart"
+      - "lib/features/pairing/pairing_controller.dart"
+      - "lib/features/pairing/pairing_state.dart"
+      - "lib/core/networking/relay_client.dart"
       - "lib/routing/router.dart"
 
   - id: US-PAIR-003
@@ -132,25 +166,27 @@ user_stories:
     journey:
       - step: 1
         action: "Navigate pairing screen using keyboard only"
-        expected: "All interactive elements reachable via Tab key"
+        expected: "Input field and Connect button are reachable via Tab key"
         failure_indicators:
           - "Focus not visible"
           - "Elements unreachable"
           - "Tab order incorrect"
 
       - step: 2
-        action: "Activate button using Enter/Space"
-        expected: "Button can be activated without mouse"
+        action: "Activate Connect button using Enter/Space"
+        expected: "Button can be activated without mouse when focused"
         failure_indicators:
           - "Keyboard activation fails"
           - "Wrong element activated"
+          - "No response to keyboard input"
 
       - step: 3
-        action: "Check for semantic labels (screen reader)"
-        expected: "Text content is readable and descriptive"
+        action: "Check for semantic labels"
+        expected: "Text content is readable and descriptive, proper form labels present"
         failure_indicators:
           - "Missing labels"
           - "Unclear descriptions"
+          - "No semantic HTML structure"
 
     success_criteria:
       - "Full keyboard navigation works"
@@ -165,3 +201,195 @@ user_stories:
 
     documentation_references:
       - "lib/features/pairing/pairing_screen.dart"
+
+  - id: US-PAIR-004
+    name: "Pairing Code Entry and Validation"
+    category: "pairing"
+    persona: "User entering a pairing code"
+    priority: "high"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        current_screen: "pairing"
+      knowledge:
+        - "User has a pairing code to enter"
+
+    journey:
+      - step: 1
+        action: "Type lowercase characters into input field"
+        expected: "Characters are automatically converted to uppercase"
+        failure_indicators:
+          - "Lowercase remains lowercase"
+          - "Text not transformed"
+          - "Formatting inconsistent"
+
+      - step: 2
+        action: "Attempt to enter special characters or spaces"
+        expected: "Only alphanumeric characters (A-Z, 0-9) are accepted"
+        failure_indicators:
+          - "Special characters accepted"
+          - "Spaces allowed"
+          - "Invalid characters in field"
+
+      - step: 3
+        action: "Try to enter more than 6 characters"
+        expected: "Input is limited to exactly 6 characters"
+        failure_indicators:
+          - "More than 6 characters allowed"
+          - "No character limit"
+          - "Counter shows wrong value"
+
+      - step: 4
+        action: "Enter exactly 6 valid alphanumeric characters"
+        expected: "Connect button becomes enabled, ready for connection"
+        failure_indicators:
+          - "Button remains disabled"
+          - "Button enabled before 6 characters"
+          - "Validation doesn't work"
+
+    success_criteria:
+      - "Automatic uppercase conversion works"
+      - "Only alphanumeric characters accepted"
+      - "6-character limit enforced"
+      - "Connect button enables only with valid code"
+
+    testing:
+      web: true
+      widget_test: true
+      integration_test: false
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
+      - "lib/features/pairing/pairing_controller.dart"
+      - "lib/features/pairing/pairing_state.dart"
+
+  - id: US-PAIR-005
+    name: "Connection Error Handling"
+    category: "pairing"
+    persona: "User experiencing connection problems"
+    priority: "high"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        current_screen: "pairing"
+      knowledge:
+        - "User may enter invalid code or experience network issues"
+
+    journey:
+      - step: 1
+        action: "Enter invalid pairing code and click Connect"
+        expected: "Error message 'Invalid pairing code' displayed in red, bold text"
+        failure_indicators:
+          - "No error message shown"
+          - "Generic error message"
+          - "App crashes"
+          - "Stuck in connecting state"
+
+      - step: 2
+        action: "Observe error state after connection failure"
+        expected: "Connect button becomes enabled again, allowing retry"
+        failure_indicators:
+          - "Button remains disabled"
+          - "Cannot retry connection"
+          - "Need to refresh page"
+
+      - step: 3
+        action: "Modify pairing code after error"
+        expected: "Error message clears, status returns to idle"
+        failure_indicators:
+          - "Error message persists"
+          - "Cannot clear error"
+          - "Status stuck in error state"
+
+      - step: 4
+        action: "Simulate network timeout"
+        expected: "Error message 'Connection timeout - please check your network' displayed"
+        failure_indicators:
+          - "No timeout handling"
+          - "App hangs indefinitely"
+          - "Unclear error message"
+
+    success_criteria:
+      - "Invalid pairing code shows specific error"
+      - "Network errors show helpful messages"
+      - "User can retry after error"
+      - "Error messages clear when code is modified"
+      - "All errors are user-friendly"
+
+    testing:
+      web: true
+      widget_test: true
+      integration_test: true
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
+      - "lib/features/pairing/pairing_controller.dart"
+      - "lib/features/pairing/pairing_state.dart"
+      - "lib/core/networking/relay_client.dart"
+
+  - id: US-PAIR-006
+    name: "Connection State Display"
+    category: "pairing"
+    persona: "User monitoring connection status"
+    priority: "high"
+
+    starting_state:
+      environment:
+        app_installed: true
+        platform: "web"
+        current_screen: "pairing"
+      knowledge:
+        - "User wants to understand current connection state"
+
+    journey:
+      - step: 1
+        action: "Load pairing screen without entering code"
+        expected: "Idle state: no status message, Connect button disabled"
+        failure_indicators:
+          - "Spurious status messages"
+          - "Button incorrectly enabled"
+          - "Wrong initial state"
+
+      - step: 2
+        action: "Enter valid code and click Connect"
+        expected: "Connecting state: 'Connecting to session...' in gray, loading spinner on button"
+        failure_indicators:
+          - "No connecting feedback"
+          - "Status message missing"
+          - "No visual loading indicator"
+
+      - step: 3
+        action: "Wait for successful connection"
+        expected: "Connected state: 'Connected! Redirecting...' in green/bold, button turns green"
+        failure_indicators:
+          - "No success message"
+          - "Wrong color coding"
+          - "No visual success indicator"
+
+      - step: 4
+        action: "Trigger connection error"
+        expected: "Error state: error message in red/bold, Connect button enabled for retry"
+        failure_indicators:
+          - "No error feedback"
+          - "Wrong color coding"
+          - "Cannot retry"
+
+    success_criteria:
+      - "All four states (idle, connecting, connected, error) display correctly"
+      - "Status messages use appropriate colors"
+      - "Visual indicators match state (spinner, button color)"
+      - "State transitions are smooth and clear"
+
+    testing:
+      web: true
+      widget_test: true
+      integration_test: true
+
+    documentation_references:
+      - "lib/features/pairing/pairing_screen.dart"
+      - "lib/features/pairing/pairing_controller.dart"
+      - "lib/features/pairing/pairing_state.dart"

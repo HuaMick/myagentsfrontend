@@ -6,11 +6,10 @@ user_stories:
   # the pubspec.yaml dependencies. Enable them when features are implemented.
 
   - id: US-WS-001
-    name: "WebSocket Connection to Claude Code"
+    name: "WebSocket Connection to Relay Server"
     category: "websocket"
-    persona: "User connecting to remote Claude Code instance"
+    persona: "User connecting to remote session via relay server"
     priority: "critical"
-    status: "future"
 
     dependencies_required:
       - "web_socket_channel: ^2.4.0"
@@ -20,15 +19,15 @@ user_stories:
         app_installed: true
         platform: "web"
         paired: true
-        claude_code_running: true
+        relay_server_available: true
       knowledge:
         - "User has valid pairing code"
-        - "Claude Code instance is running and accessible"
+        - "Relay server is running and accessible at relay.remoteagents.dev"
 
     journey:
       - step: 1
-        action: "Enter pairing code/scan QR code"
-        expected: "WebSocket connection initiated"
+        action: "Enter pairing code and click Connect"
+        expected: "WebSocket connection initiated to wss://relay.remoteagents.dev/ws/client/{pairingCode}"
         failure_indicators:
           - "Connection fails immediately"
           - "Timeout without feedback"
@@ -36,7 +35,7 @@ user_stories:
 
       - step: 2
         action: "Wait for connection establishment"
-        expected: "Connection status indicates success"
+        expected: "Connection status indicates success, RelayClient reports connected state"
         failure_indicators:
           - "Stuck in connecting state"
           - "Silent failure"
@@ -44,15 +43,17 @@ user_stories:
 
       - step: 3
         action: "Observe connected state"
-        expected: "Terminal becomes active, ready for input"
+        expected: "Connection established, auto-reconnect enabled, ready for encrypted message exchange"
         failure_indicators:
-          - "Terminal remains inactive"
           - "Connection drops immediately"
+          - "No auto-reconnect on disconnect"
+          - "WebSocket channel not initialized"
 
     success_criteria:
-      - "WebSocket connection establishes"
-      - "Connection status is displayed"
-      - "Reconnection on disconnect (if implemented)"
+      - "WebSocket connection establishes to relay server"
+      - "Connection state is managed correctly"
+      - "Auto-reconnection works on disconnect with exponential backoff"
+      - "Message stream is available for communication"
 
     testing:
       web: true
@@ -61,14 +62,14 @@ user_stories:
       note: "Requires mock WebSocket server for testing"
 
     documentation_references:
-      - "lib/features/websocket/ (when created)"
+      - "lib/core/networking/relay_client.dart"
+      - "lib/core/networking/connection_state.dart"
 
   - id: US-CRYPT-001
-    name: "Encrypted Communication"
+    name: "Encrypted Communication with NaCl"
     category: "security"
-    persona: "User expecting secure communication"
+    persona: "User expecting secure end-to-end encrypted communication"
     priority: "critical"
-    status: "future"
 
     dependencies_required:
       - "pinenacl: ^0.5.1"
@@ -78,40 +79,56 @@ user_stories:
         app_installed: true
         platform: "web"
         connected: true
+        key_pair_generated: true
       knowledge:
-        - "User expects encryption"
+        - "User expects E2E encryption"
         - "User has established connection"
+        - "Key pairs have been generated (X25519)"
 
     journey:
       - step: 1
-        action: "Send a message through terminal"
-        expected: "Message is encrypted before transmission"
+        action: "Send a message through the relay"
+        expected: "Message is encrypted using NaCl Box (X25519-XSalsa20-Poly1305) before transmission"
         failure_indicators:
           - "Plaintext visible in network tab"
           - "Encryption errors"
           - "Message fails to send"
+          - "No nonce in encrypted message"
 
       - step: 2
-        action: "Receive response from Claude Code"
-        expected: "Response is decrypted and displayed correctly"
+        action: "Inspect encrypted message format"
+        expected: "Message format is Base64(nonce || ciphertext) with 24-byte nonce and Poly1305 MAC"
+        failure_indicators:
+          - "Wrong encryption format"
+          - "Missing nonce or MAC"
+          - "Not Base64 encoded"
+
+      - step: 3
+        action: "Receive encrypted response from remote peer"
+        expected: "Response is decrypted correctly and displayed as plaintext"
         failure_indicators:
           - "Garbled text displayed"
           - "Decryption errors"
+          - "MAC verification fails"
           - "Response lost"
 
     success_criteria:
-      - "All communication encrypted with NaCl"
-      - "Key exchange completed securely"
-      - "No plaintext in transit"
+      - "All communication encrypted with NaCl Box"
+      - "X25519 key pairs generated correctly"
+      - "Encryption format matches PyNaCl compatibility"
+      - "No plaintext in transit (verify in network tab)"
+      - "MAC verification prevents message tampering"
 
     testing:
       web: true
-      widget_test: false
+      widget_test: true
       integration_test: true
-      note: "Verify encryption via network inspection"
+      note: "Verify encryption via network inspection and unit tests"
 
     documentation_references:
-      - "lib/features/encryption/ (when created)"
+      - "lib/core/crypto/nacl_crypto.dart"
+      - "lib/core/crypto/key_pair.dart"
+      - "lib/core/crypto/message_envelope.dart"
 
   - id: US-XTERM-001
     name: "Terminal Input and Output"
@@ -130,8 +147,10 @@ user_stories:
         connected: true
         terminal_active: true
       knowledge:
-        - "User is connected to Claude Code"
+        - "User is connected to remote session"
         - "Terminal is ready for input"
+
+    implementation_note: "Terminal screen currently exists as placeholder only. Xterm.js integration is pending."
 
     journey:
       - step: 1
@@ -192,6 +211,8 @@ user_stories:
       knowledge:
         - "User has microphone access"
         - "User wants to speak instead of type"
+
+    implementation_note: "Voice feature directory exists but is empty. Voice input integration not yet implemented."
 
     journey:
       - step: 1
