@@ -12,8 +12,21 @@ import 'pairing_state.dart' as pairing;
 /// - Connecting to a remote session via the relay server
 /// - Displaying connection status and error messages
 /// - Navigating to the terminal screen upon successful connection
+///
+/// Supports dependency injection for testing:
+/// ```dart
+/// // Production usage - creates its own controller
+/// PairingScreen()
+///
+/// // Test usage - inject mock controller
+/// PairingScreen(controller: mockController)
+/// ```
 class PairingScreen extends StatefulWidget {
-  const PairingScreen({super.key});
+  /// Optional controller for dependency injection (used in tests).
+  /// If null, a new PairingController is created internally.
+  final PairingController? controller;
+
+  const PairingScreen({super.key, this.controller});
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -23,10 +36,15 @@ class _PairingScreenState extends State<PairingScreen> {
   late final PairingController _controller;
   late final TextEditingController _textController;
 
+  /// Whether we own the controller (created it) and should dispose it.
+  late final bool _ownsController;
+
   @override
   void initState() {
     super.initState();
-    _controller = PairingController();
+    // Use injected controller or create our own
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? PairingController();
     _textController = TextEditingController();
 
     // Listen to controller state changes for navigation
@@ -36,7 +54,10 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void dispose() {
     _controller.removeListener(_handleStateChange);
-    _controller.dispose();
+    // Only dispose if we created the controller (not injected)
+    if (_ownsController) {
+      _controller.dispose();
+    }
     _textController.dispose();
     super.dispose();
   }

@@ -253,7 +253,14 @@ class RelayClient {
   }
 
   /// Handles WebSocket connection closure.
+  ///
+  /// This is called when the WebSocket stream completes (server closed connection,
+  /// network error, or normal close). The state is updated synchronously to ensure
+  /// listeners are notified immediately.
   void _handleDone() {
+    // Clean up channel reference immediately to reflect disconnected state
+    _channel = null;
+
     // Only reconnect if not intentionally disconnected
     if (!_intentionalDisconnect) {
       stateManager.setError('Connection closed unexpectedly');

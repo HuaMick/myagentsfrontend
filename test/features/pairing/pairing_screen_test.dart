@@ -3,7 +3,53 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:myagents_frontend/features/pairing/pairing_screen.dart';
 import 'package:myagents_frontend/features/pairing/pairing_controller.dart';
-import 'package:myagents_frontend/features/pairing/pairing_state.dart';
+import 'package:myagents_frontend/features/pairing/pairing_state.dart' as pairing;
+
+/// Mock PairingController that allows setting state directly for UI testing.
+///
+/// This enables testing UI rendering for different states without triggering
+/// real network connections.
+class MockPairingController extends PairingController {
+  pairing.PairingState _mockState;
+
+  MockPairingController({pairing.PairingState? initialState})
+      : _mockState = initialState ?? pairing.PairingState.initial();
+
+  @override
+  pairing.PairingState get state => _mockState;
+
+  /// Sets the mock state and notifies listeners.
+  void setMockState(pairing.PairingState newState) {
+    _mockState = newState;
+    notifyListeners();
+  }
+
+  /// Sets just the connection state, preserving other state values.
+  void setMockConnectionState(pairing.ConnectionState connectionState, {String? errorMessage}) {
+    _mockState = _mockState.copyWith(
+      connectionState: connectionState,
+      errorMessage: errorMessage,
+      clearError: errorMessage == null,
+    );
+    notifyListeners();
+  }
+
+  @override
+  Future<void> connect() async {
+    // Mock implementation - don't actually connect
+    setMockConnectionState(pairing.ConnectionState.connecting);
+  }
+
+  @override
+  void updateCode(String code) {
+    _mockState = _mockState.copyWith(
+      pairingCode: code.toUpperCase(),
+      connectionState: pairing.ConnectionState.idle,
+      clearError: true,
+    );
+    notifyListeners();
+  }
+}
 
 void main() {
   group('PairingScreen Widget Tests', () {
@@ -202,66 +248,63 @@ void main() {
 
       testWidgets('Connecting... visible when connecting state',
           (WidgetTester tester) async {
-        // Note: This test is challenging because it requires mocking the controller
-        // and changing state. For now, we verify the UI can show connecting state.
-        // A more comprehensive test would require a mock controller.
-        //
-        // SKIP: This test triggers real network connections which leave pending
-        // timers. Proper solution would require dependency injection for the controller.
-        // See: https://github.com/flutter/flutter/issues/84131
-
-        await tester.pumpWidget(
-          MaterialApp(
-            home: PairingScreen(),
+        // Create mock controller in connecting state
+        final mockController = MockPairingController(
+          initialState: pairing.PairingState.initial().copyWith(
+            pairingCode: 'ABC123',
+            connectionState: pairing.ConnectionState.connecting,
           ),
         );
 
-        // Enter valid code
-        await tester.enterText(find.byType(TextField), 'ABC123');
-        await tester.pump();
-
-        // Verify the button is now enabled (valid code makes canConnect true)
-        final button = tester.widget<ElevatedButton>(
-          find.widgetWithText(ElevatedButton, 'Connect'),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: PairingScreen(controller: mockController),
+          ),
         );
-        expect(button.onPressed, isNotNull);
 
-        // Note: We don't tap the connect button because it triggers a real network
-        // connection that creates timers. The controller tests cover connection logic.
-        //
-        // TECHNICAL DEBT: PairingScreen lacks dependency injection for controller,
-        // preventing mock injection. State management is fully tested (109 controller
-        // tests passing). UI-state binding relies on standard Consumer pattern.
-        // Fixing requires architectural change to add optional controller parameter.
-      }, skip: true);
+        // Verify "Connecting to session..." message is visible
+        expect(find.text('Connecting to session...'), findsOneWidget);
+
+        // Verify the text has the correct styling (grey color)
+        final textWidget = tester.widget<Text>(
+          find.text('Connecting to session...'),
+        );
+        expect(textWidget.style?.color, equals(Colors.grey));
+
+        // Clean up
+        mockController.dispose();
+      });
 
       testWidgets('Error message visible when error state (red)',
           (WidgetTester tester) async {
-        // SKIP: This test triggers real network connections which leave pending
-        // timers and causes pumpAndSettle to timeout.
-        // Proper solution would require dependency injection for the controller.
-        //
-        // The controller unit tests and integration tests already cover error
-        // state handling thoroughly.
-
-        await tester.pumpWidget(
-          MaterialApp(
-            home: PairingScreen(),
+        // Create mock controller in error state with specific error message
+        final mockController = MockPairingController(
+          initialState: pairing.PairingState.initial().copyWith(
+            pairingCode: 'ABC123',
+            connectionState: pairing.ConnectionState.error,
+            errorMessage: 'Invalid pairing code',
           ),
         );
 
-        // Verify the screen builds without errors
-        expect(find.byType(TextField), findsOneWidget);
-        expect(find.byType(ElevatedButton), findsOneWidget);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: PairingScreen(controller: mockController),
+          ),
+        );
 
-        // Note: We can't easily test error message display without mocking
-        // the controller to avoid real network connections.
-        //
-        // TECHNICAL DEBT: PairingScreen lacks dependency injection for controller.
-        // Error message generation and formatting is fully tested. UI rendering
-        // relies on standard Consumer pattern. Fixing requires architectural
-        // change to add optional controller parameter.
-      }, skip: true);
+        // Verify error message is visible
+        expect(find.text('Invalid pairing code'), findsOneWidget);
+
+        // Verify the text has the correct styling (red color, bold)
+        final textWidget = tester.widget<Text>(
+          find.text('Invalid pairing code'),
+        );
+        expect(textWidget.style?.color, equals(Colors.red));
+        expect(textWidget.style?.fontWeight, equals(FontWeight.bold));
+
+        // Clean up
+        mockController.dispose();
+      });
     });
 
     group('Input Formatters', () {
@@ -351,30 +394,29 @@ void main() {
 
       testWidgets('Button shows loading spinner when connecting',
           (WidgetTester tester) async {
-        // SKIP: This test triggers real network connections which leave pending
-        // timers. Proper solution would require dependency injection for the controller.
-        await tester.pumpWidget(
-          MaterialApp(
-            home: PairingScreen(),
+        // Create mock controller in connecting state
+        final mockController = MockPairingController(
+          initialState: pairing.PairingState.initial().copyWith(
+            pairingCode: 'ABC123',
+            connectionState: pairing.ConnectionState.connecting,
           ),
         );
 
-        // Verify the button exists and can be tapped
-        await tester.enterText(find.byType(TextField), 'ABC123');
-        await tester.pump();
-
-        // Note: We don't tap Connect because it triggers real network connections
-        // which create timers that cause test cleanup issues.
-        final button = tester.widget<ElevatedButton>(
-          find.widgetWithText(ElevatedButton, 'Connect'),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: PairingScreen(controller: mockController),
+          ),
         );
-        expect(button.onPressed, isNotNull);
-        //
-        // TECHNICAL DEBT: PairingScreen lacks dependency injection for controller.
-        // Connecting state transitions are fully tested. Button UI logic is simple
-        // conditional rendering. Fixing requires architectural change to add
-        // optional controller parameter.
-      }, skip: true);
+
+        // Verify the loading spinner is visible
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+        // Verify the "Connect" text is NOT visible (replaced by spinner)
+        expect(find.text('Connect'), findsNothing);
+
+        // Clean up
+        mockController.dispose();
+      });
     });
 
     group('Edge Cases', () {

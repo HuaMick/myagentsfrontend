@@ -319,10 +319,6 @@ void main() {
       // Coverage: 'Retry after error - valid code should allow retry' (line 77) tests recovery flow
 
       test('Server force disconnect triggers error state', () async {
-        // SKIP: This test has timing issues with server force disconnect.
-        // The client may not always detect the disconnect before test timeout.
-        // Force disconnect behavior is less critical for pairing flow.
-
         // Start server
         final server = MockRelayServer(
           config: const MockRelayServerConfig(verbose: false),
@@ -344,15 +340,28 @@ void main() {
 
           expect(client.isConnected, isTrue);
 
-          // Track state changes
-          final states = <networking.ConnectionState>[];
+          // Track state changes using a completer to wait for disconnect
+          final disconnectCompleter = Completer<void>();
           client.stateManager.addListener(() {
-            states.add(client.stateManager.currentState);
+            final state = client.stateManager.currentState;
+            if (state == networking.ConnectionState.error ||
+                state == networking.ConnectionState.disconnected) {
+              if (!disconnectCompleter.isCompleted) {
+                disconnectCompleter.complete();
+              }
+            }
           });
 
           // Server force disconnect
           await server.forceDisconnect(pairingCode);
-          await Future.delayed(const Duration(milliseconds: 200));
+
+          // Wait for disconnect to be detected (with timeout)
+          await disconnectCompleter.future.timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {
+              fail('Timeout waiting for disconnect detection');
+            },
+          );
 
           // Verify client detects disconnection
           expect(client.isConnected, isFalse);
@@ -363,7 +372,7 @@ void main() {
           await client.dispose();
           await server.stop();
         }
-      }, skip: 'TECHNICAL DEBT: WebSocket timing/race conditions make this test flaky. Force disconnect is low priority for pairing flow (one-time connection). The _handleDone() code path exists (relay_client.dart:255) but reliable testing requires WebSocket layer improvements.');
+      });
     });
   });
 
