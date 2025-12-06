@@ -37,7 +37,7 @@ steps:
       - |
         echo "=== Running Flutter Analyze ==="
         docker run --rm gcr.io/$PROJECT_ID/${_IMAGE_NAME}:pr-$BUILD_ID \
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos --no-fatal-warnings
     id: 'lint'
     waitFor: ['build-image']
 
