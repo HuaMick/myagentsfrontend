@@ -61,6 +61,8 @@ steps:
   # ==============================================================================
   # 4. Unit Tests
   # ==============================================================================
+  # NOTE: Coverage collection disabled due to VM segfault issues in Cloud Build
+  # See: https://github.com/flutter/flutter/issues/issues with coverage + Docker
   - name: 'gcr.io/cloud-builders/docker'
     entrypoint: 'bash'
     args:
