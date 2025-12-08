@@ -4,7 +4,6 @@ import 'dart:io';
 
 import '../lib/core/crypto/key_pair.dart';
 import '../lib/core/crypto/message_envelope.dart';
-import '../lib/core/crypto/nacl_crypto.dart';
 
 /// Mock relay server for testing RelayClient without RemoteAgents dependency.
 ///
@@ -303,6 +302,7 @@ class MockRelayServer {
       }
 
       // Extract client's public key
+      // ignore: unused_local_variable
       final clientPublicKeyBytes = base64Decode(envelope.senderPublicKey);
       final clientKeys = KeyPair.fromBase64({
         'privateKey': base64Encode(KeyPair.generate().privateKeyBytes), // dummy private key

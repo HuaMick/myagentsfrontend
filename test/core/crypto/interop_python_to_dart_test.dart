@@ -132,6 +132,7 @@ void main() {
       });
 
       // Take valid ciphertext and corrupt the last byte (MAC corruption)
+      // ignore: unused_local_variable
       const validCiphertext = 'K5plRsDtGFIWp1cDAD57kk/fiTy/iJIuiYE5pJYtzEiRJ5ZQiybr2SE8HpZiq+aVBciAuIVGRaUDiw==';
       const tamperedCiphertext = 'K5plRsDtGFIWp1cDAD57kk/fiTy/iJIuiYE5pJYtzEiRJ5ZQiybr2SE8HpZiq+aVBciAuIVGRaUDjw=='; // Changed last byte
 

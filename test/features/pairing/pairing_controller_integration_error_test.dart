@@ -202,6 +202,7 @@ void main() {
         await Future.delayed(const Duration(milliseconds: 100));
 
         expect(controller.state.connectionState, ConnectionState.error);
+        // ignore: unused_local_variable
         final firstError = controller.state.errorMessage;
 
         // Update code (resets to idle)
