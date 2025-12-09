@@ -6,6 +6,7 @@ import '../../core/networking/relay_client.dart';
 import '../../core/crypto/key_pair.dart';
 import 'terminal_controller.dart';
 import 'terminal_state.dart';
+import '../voice/voice_button.dart';
 
 /// Main screen for remote terminal display using xterm.dart.
 ///
@@ -13,6 +14,7 @@ import 'terminal_state.dart';
 /// - xterm widget for terminal output and ANSI color rendering
 /// - Connection status indicator in AppBar
 /// - Disconnect button to close connection
+/// - VoiceButton FAB for push-to-talk voice input
 /// - Loading, error, and disconnected state handling
 ///
 /// Requires RelayClient and key pairs to be available via Provider or passed.
@@ -43,6 +45,10 @@ class _TerminalScreenState extends State<TerminalScreen> {
   FocusNode? _focusNode;
   bool _initialized = false;
 
+  // Keys for voice button (resolved from widget or Provider)
+  KeyPair? _ourKeys;
+  KeyPair? _remoteKeys;
+
   @override
   void initState() {
     super.initState();
@@ -63,15 +69,15 @@ class _TerminalScreenState extends State<TerminalScreen> {
     // Get dependencies from widget props or Provider
     final relayClient = widget.relayClient ??
         Provider.of<RelayClient>(context, listen: false);
-    final ourKeys = widget.ourKeys ??
+    _ourKeys = widget.ourKeys ??
         Provider.of<KeyPair>(context, listen: false);
 
     // For remote keys, we need a way to get them
     // This would typically come from the pairing process
-    KeyPair? remoteKeys = widget.remoteKeys;
-    if (remoteKeys == null) {
+    _remoteKeys = widget.remoteKeys;
+    if (_remoteKeys == null) {
       try {
-        remoteKeys = Provider.of<KeyPair>(context, listen: false);
+        _remoteKeys = Provider.of<KeyPair>(context, listen: false);
       } catch (e) {
         // Remote keys not available, show error
         _terminalState?.setError('Remote keys not available. Complete pairing first.');
@@ -82,8 +88,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
     // Create terminal controller
     _controller = RemoteTerminalController(
       relayClient: relayClient,
-      ourKeys: ourKeys,
-      remoteKeys: remoteKeys,
+      ourKeys: _ourKeys!,
+      remoteKeys: _remoteKeys!,
       terminalState: _terminalState!,
     );
 
@@ -134,6 +140,31 @@ class _TerminalScreenState extends State<TerminalScreen> {
     });
   }
 
+  /// Sends voice transcript to terminal input
+  ///
+  /// Called when voice recording completes with final transcript.
+  void _sendVoiceToTerminal(String text) {
+    // Send to terminal via relay client (same path as keyboard input)
+    _controller?.relayClient.sendTerminalInput('$text\n');
+
+    // Show brief feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Voice: $text'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  /// Check if we can show the voice button
+  bool get _canShowVoiceButton =>
+      _controller != null &&
+      _controller!.relayClient.isConnected &&
+      _ourKeys != null &&
+      _remoteKeys != null;
+
   @override
   void dispose() {
     _controller?.relayClient.stateManager.removeListener(_onConnectionStateChanged);
@@ -164,6 +195,16 @@ class _TerminalScreenState extends State<TerminalScreen> {
         ],
       ),
       body: _buildBody(),
+      // VoiceButton as FAB - only show when connected with keys
+      floatingActionButton: _canShowVoiceButton
+          ? VoiceButton(
+              relayClient: _controller!.relayClient,
+              ourKeys: _ourKeys!,
+              remoteKeys: _remoteKeys!,
+              onTranscriptComplete: _sendVoiceToTerminal,
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
