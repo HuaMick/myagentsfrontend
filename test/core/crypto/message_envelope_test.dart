@@ -584,6 +584,206 @@ void main() {
       });
     });
 
+    group('Voice Message Types - Enum Existence', () {
+      test('voiceAudioFrame exists in MessageType enum', () {
+        expect(MessageType.values.contains(MessageType.voiceAudioFrame), isTrue);
+      });
+
+      test('voiceTranscript exists in MessageType enum', () {
+        expect(MessageType.values.contains(MessageType.voiceTranscript), isTrue);
+      });
+
+      test('voiceControl exists in MessageType enum', () {
+        expect(MessageType.values.contains(MessageType.voiceControl), isTrue);
+      });
+
+      test('voiceStatus exists in MessageType enum', () {
+        expect(MessageType.values.contains(MessageType.voiceStatus), isTrue);
+      });
+    });
+
+    group('Voice Message Types - toSnakeCase', () {
+      test('voiceAudioFrame converts to voice.audio_frame', () {
+        expect(MessageType.voiceAudioFrame.toSnakeCase(), 'voice.audio_frame');
+      });
+
+      test('voiceTranscript converts to voice.transcript', () {
+        expect(MessageType.voiceTranscript.toSnakeCase(), 'voice.transcript');
+      });
+
+      test('voiceControl converts to voice.control', () {
+        expect(MessageType.voiceControl.toSnakeCase(), 'voice.control');
+      });
+
+      test('voiceStatus converts to voice.status', () {
+        expect(MessageType.voiceStatus.toSnakeCase(), 'voice.status');
+      });
+    });
+
+    group('Voice Message Types - fromSnakeCase', () {
+      test('voice.audio_frame parses to voiceAudioFrame', () {
+        expect(
+          MessageTypeExtension.fromSnakeCase('voice.audio_frame'),
+          MessageType.voiceAudioFrame,
+        );
+      });
+
+      test('voice.transcript parses to voiceTranscript', () {
+        expect(
+          MessageTypeExtension.fromSnakeCase('voice.transcript'),
+          MessageType.voiceTranscript,
+        );
+      });
+
+      test('voice.control parses to voiceControl', () {
+        expect(
+          MessageTypeExtension.fromSnakeCase('voice.control'),
+          MessageType.voiceControl,
+        );
+      });
+
+      test('voice.status parses to voiceStatus', () {
+        expect(
+          MessageTypeExtension.fromSnakeCase('voice.status'),
+          MessageType.voiceStatus,
+        );
+      });
+
+      test('unknown type throws ArgumentError', () {
+        expect(
+          () => MessageTypeExtension.fromSnakeCase('unknown.type'),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              contains('Unknown message type: unknown.type'),
+            ),
+          ),
+        );
+      });
+    });
+
+    group('Voice Message Types - Serialization Symmetry', () {
+      test('voiceAudioFrame toSnakeCase/fromSnakeCase round-trip', () {
+        final snakeCase = MessageType.voiceAudioFrame.toSnakeCase();
+        final restored = MessageTypeExtension.fromSnakeCase(snakeCase);
+        expect(restored, MessageType.voiceAudioFrame);
+      });
+
+      test('voiceTranscript toSnakeCase/fromSnakeCase round-trip', () {
+        final snakeCase = MessageType.voiceTranscript.toSnakeCase();
+        final restored = MessageTypeExtension.fromSnakeCase(snakeCase);
+        expect(restored, MessageType.voiceTranscript);
+      });
+
+      test('voiceControl toSnakeCase/fromSnakeCase round-trip', () {
+        final snakeCase = MessageType.voiceControl.toSnakeCase();
+        final restored = MessageTypeExtension.fromSnakeCase(snakeCase);
+        expect(restored, MessageType.voiceControl);
+      });
+
+      test('voiceStatus toSnakeCase/fromSnakeCase round-trip', () {
+        final snakeCase = MessageType.voiceStatus.toSnakeCase();
+        final restored = MessageTypeExtension.fromSnakeCase(snakeCase);
+        expect(restored, MessageType.voiceStatus);
+      });
+    });
+
+    group('Voice Message Types - MessageEnvelope Serialization', () {
+      test('voiceAudioFrame MessageEnvelope serialization round-trip', () {
+        final payload = {
+          'audio_data': 'base64_encoded_audio_chunk',
+          'sample_rate': 16000,
+        };
+        final envelope = MessageEnvelope.seal(
+          MessageType.voiceAudioFrame,
+          payload,
+          clientKeys,
+          serverKeys,
+        );
+
+        final json = envelope.toJson();
+        expect(json['type'], 'voice.audio_frame');
+
+        final restored = MessageEnvelope.fromJson(json);
+        expect(restored.type, MessageType.voiceAudioFrame);
+        expect(restored.payload, envelope.payload);
+
+        final decrypted = restored.open(serverKeys, clientKeys);
+        expect(decrypted, payload);
+      });
+
+      test('voiceTranscript MessageEnvelope serialization round-trip', () {
+        final payload = {
+          'text': 'Hello world',
+          'is_final': true,
+          'confidence': 0.95,
+        };
+        final envelope = MessageEnvelope.seal(
+          MessageType.voiceTranscript,
+          payload,
+          serverKeys,
+          clientKeys,
+        );
+
+        final json = envelope.toJson();
+        expect(json['type'], 'voice.transcript');
+
+        final restored = MessageEnvelope.fromJson(json);
+        expect(restored.type, MessageType.voiceTranscript);
+        expect(restored.payload, envelope.payload);
+
+        final decrypted = restored.open(clientKeys, serverKeys);
+        expect(decrypted, payload);
+      });
+
+      test('voiceControl MessageEnvelope serialization round-trip', () {
+        final payload = {
+          'action': 'start',
+          'parameters': {'language': 'en-US'},
+        };
+        final envelope = MessageEnvelope.seal(
+          MessageType.voiceControl,
+          payload,
+          clientKeys,
+          serverKeys,
+        );
+
+        final json = envelope.toJson();
+        expect(json['type'], 'voice.control');
+
+        final restored = MessageEnvelope.fromJson(json);
+        expect(restored.type, MessageType.voiceControl);
+        expect(restored.payload, envelope.payload);
+
+        final decrypted = restored.open(serverKeys, clientKeys);
+        expect(decrypted, payload);
+      });
+
+      test('voiceStatus MessageEnvelope serialization round-trip', () {
+        final payload = {
+          'status': 'ready',
+          'message': 'Voice service is ready',
+        };
+        final envelope = MessageEnvelope.seal(
+          MessageType.voiceStatus,
+          payload,
+          serverKeys,
+          clientKeys,
+        );
+
+        final json = envelope.toJson();
+        expect(json['type'], 'voice.status');
+
+        final restored = MessageEnvelope.fromJson(json);
+        expect(restored.type, MessageType.voiceStatus);
+        expect(restored.payload, envelope.payload);
+
+        final decrypted = restored.open(clientKeys, serverKeys);
+        expect(decrypted, payload);
+      });
+    });
+
     group('Integration Tests', () {
       test('full message lifecycle: create, serialize, deserialize, decrypt', () {
         // 1. Create original payload

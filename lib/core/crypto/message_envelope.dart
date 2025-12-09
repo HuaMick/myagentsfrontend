@@ -15,6 +15,18 @@ enum MessageType {
 
   /// Initial pairing handshake
   pairingRequest,
+
+  /// Audio chunk from frontend to backend
+  voiceAudioFrame,
+
+  /// Transcript from backend to frontend (interim + final)
+  voiceTranscript,
+
+  /// Control messages (start, stop, cancel)
+  voiceControl,
+
+  /// Status updates from backend (ready, error)
+  voiceStatus,
 }
 
 /// Extension to convert MessageType to/from snake_case strings
@@ -30,6 +42,14 @@ extension MessageTypeExtension on MessageType {
         return 'resize';
       case MessageType.pairingRequest:
         return 'pairing_request';
+      case MessageType.voiceAudioFrame:
+        return 'voice.audio_frame';
+      case MessageType.voiceTranscript:
+        return 'voice.transcript';
+      case MessageType.voiceControl:
+        return 'voice.control';
+      case MessageType.voiceStatus:
+        return 'voice.status';
     }
   }
 
@@ -44,6 +64,14 @@ extension MessageTypeExtension on MessageType {
         return MessageType.resize;
       case 'pairing_request':
         return MessageType.pairingRequest;
+      case 'voice.audio_frame':
+        return MessageType.voiceAudioFrame;
+      case 'voice.transcript':
+        return MessageType.voiceTranscript;
+      case 'voice.control':
+        return MessageType.voiceControl;
+      case 'voice.status':
+        return MessageType.voiceStatus;
       default:
         throw ArgumentError('Unknown message type: $value');
     }
@@ -55,7 +83,8 @@ extension MessageTypeExtension on MessageType {
 /// MessageEnvelope provides encryption and serialization for all client-relay
 /// communication. The protocol format matches RemoteAgents exactly:
 /// {
-///   "type": "terminal_input" | "terminal_output" | "resize" | "pairing_request",
+///   "type": "terminal_input" | "terminal_output" | "resize" | "pairing_request" |
+///           "voice.audio_frame" | "voice.transcript" | "voice.control" | "voice.status",
 ///   "payload": <encrypted_data_base64>,
 ///   "sender_public_key": <base64>,
 ///   "timestamp": <iso8601>

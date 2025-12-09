@@ -371,6 +371,17 @@ class MockRelayServer {
           print('Warning: Client sent terminal_output message');
         }
         break;
+
+      // Voice message types - handled by voice-specific handlers (not in mock relay server)
+      case MessageType.voiceAudioFrame:
+      case MessageType.voiceTranscript:
+      case MessageType.voiceControl:
+      case MessageType.voiceStatus:
+        // Voice messages are handled by VoiceRelayHandler, not mock relay server
+        if (_config.verbose) {
+          print('Voice message received: ${type.toSnakeCase()}');
+        }
+        break;
     }
   }
 
