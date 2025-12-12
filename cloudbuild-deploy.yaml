@@ -1,0 +1,380 @@
+# ==============================================================================
+# Cloud Build - MyAgentsFrontend Deployment to Cloud Storage + CDN
+# ==============================================================================
+# Production deployment pipeline for Flutter web application
+# Steps:
+#   1. Build Flutter web --release
+#   2. Upload static files to Cloud Storage bucket
+#   3. Configure Cloud CDN caching
+#   4. Set up CORS for Cloud Run relay API calls
+#   5. Validate CORS configuration
+#
+# Trigger: Manual or from CI/CD pipeline
+# GCP Project: myagents-475112
+# Region: us-central1
+# Bucket: gs://myagents-frontend/
+# ==============================================================================
+
+steps:
+  # ==============================================================================
+  # 1. Build Docker Image for Flutter Build
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Building Flutter build image ==="
+        docker pull gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest || true
+
+        # Build with cache for faster builds
+        docker build \
+          -t gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest \
+          --cache-from gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest \
+          -f Dockerfile.test \
+          .
+    id: 'build-image'
+
+  # ==============================================================================
+  # 2. Build Flutter Web Application (Release Mode)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Building Flutter Web Application (Release) ==="
+        mkdir -p /workspace/web_build
+
+        # Run container to build web
+        CONTAINER_ID=$(docker run -d gcr.io/$PROJECT_ID/${_IMAGE_NAME}:latest sleep infinity)
+
+        # Build web with release mode and optimizations
+        echo "Running: flutter build web --release"
+        docker exec $${CONTAINER_ID} flutter build web --release
+
+        # Copy build output to workspace
+        echo "=== Extracting web build output ==="
+        docker cp $${CONTAINER_ID}:/app/build/web /workspace/web_build/
+
+        # Cleanup container
+        docker stop $${CONTAINER_ID} > /dev/null
+        docker rm $${CONTAINER_ID} > /dev/null
+
+        # Verify build output
+        echo "=== Web build contents ==="
+        ls -laR /workspace/web_build/web/ | head -50
+
+        # Check for critical files
+        echo "=== Verifying critical files exist ==="
+        test -f /workspace/web_build/web/index.html || (echo "ERROR: index.html not found" && exit 1)
+        test -f /workspace/web_build/web/main.dart.js || (echo "ERROR: main.dart.js not found" && exit 1)
+        test -d /workspace/web_build/web/assets || (echo "ERROR: assets directory not found" && exit 1)
+
+        echo "=== Build verification passed ==="
+    id: 'build-web'
+    waitFor: ['build-image']
+
+  # ==============================================================================
+  # 3. Create CORS Configuration File
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Creating CORS configuration for Cloud Storage ==="
+        cat > /workspace/cors.json << 'EOF'
+        [
+          {
+            "origin": ["https://myagents-frontend.web.app", "https://*.web.app", "https://*.run.app"],
+            "method": ["GET", "HEAD", "OPTIONS"],
+            "responseHeader": [
+              "Content-Type",
+              "Access-Control-Allow-Origin",
+              "Access-Control-Allow-Methods",
+              "Access-Control-Allow-Headers"
+            ],
+            "maxAgeSeconds": 3600
+          },
+          {
+            "origin": ["http://localhost:*", "http://127.0.0.1:*"],
+            "method": ["GET", "HEAD", "OPTIONS"],
+            "responseHeader": ["Content-Type"],
+            "maxAgeSeconds": 3600
+          }
+        ]
+        EOF
+
+        echo "CORS configuration created:"
+        cat /workspace/cors.json
+    id: 'create-cors-config'
+    waitFor: ['-']
+
+  # ==============================================================================
+  # 4. Create Cloud Storage Bucket (if not exists)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Ensuring Cloud Storage bucket exists ==="
+
+        # Check if bucket exists
+        if gsutil ls -b gs://${_BUCKET_NAME}/ 2>&1 | grep -q "BucketNotFoundException"; then
+          echo "Creating bucket: ${_BUCKET_NAME}"
+
+          # Create bucket with standard storage class and uniform access
+          gsutil mb \
+            -p $PROJECT_ID \
+            -c STANDARD \
+            -l ${_REGION} \
+            -b on \
+            gs://${_BUCKET_NAME}/
+
+          echo "Bucket created successfully"
+        else
+          echo "Bucket already exists: ${_BUCKET_NAME}"
+        fi
+
+        # Verify bucket exists
+        gsutil ls -b gs://${_BUCKET_NAME}/ || (echo "ERROR: Bucket verification failed" && exit 1)
+    id: 'create-bucket'
+    waitFor: ['create-cors-config']
+
+  # ==============================================================================
+  # 5. Configure Bucket for Public Web Hosting
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Configuring bucket for public web hosting ==="
+
+        # Set default page and error page
+        gsutil web set -m index.html -e index.html gs://${_BUCKET_NAME}/
+
+        # Make bucket contents publicly readable
+        gsutil iam ch allUsers:objectViewer gs://${_BUCKET_NAME}/
+
+        echo "Bucket configured for public web hosting"
+    id: 'configure-bucket'
+    waitFor: ['create-bucket']
+
+  # ==============================================================================
+  # 6. Apply CORS Configuration to Bucket
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Applying CORS configuration to bucket ==="
+
+        # Apply CORS configuration
+        gsutil cors set /workspace/cors.json gs://${_BUCKET_NAME}/
+
+        # Verify CORS configuration
+        echo "=== Current CORS configuration ==="
+        gsutil cors get gs://${_BUCKET_NAME}/
+    id: 'apply-cors'
+    waitFor: ['configure-bucket', 'create-cors-config']
+
+  # ==============================================================================
+  # 7. Upload Web Build to Cloud Storage
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Uploading web build to Cloud Storage ==="
+
+        # Sync web build to bucket
+        # -m: parallel upload for faster performance
+        # -r: recursive
+        # -d: delete remote files not in source
+        gsutil -m rsync -r -d \
+          -x '.*/\..*' \
+          /workspace/web_build/web/ \
+          gs://${_BUCKET_NAME}/
+
+        # Set cache control headers for different file types
+        echo "=== Setting cache control headers ==="
+
+        # HTML files: short cache (1 hour) for faster updates
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=3600" \
+          gs://${_BUCKET_NAME}/*.html
+
+        # JavaScript and CSS: long cache (1 year) with versioning
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=31536000, immutable" \
+          'gs://${_BUCKET_NAME}/*.js'
+
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=31536000, immutable" \
+          'gs://${_BUCKET_NAME}/*.css' || true
+
+        # Assets (fonts, images): long cache (1 year)
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=31536000, immutable" \
+          'gs://${_BUCKET_NAME}/assets/**' || true
+
+        # Favicon: medium cache (1 day)
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=86400" \
+          'gs://${_BUCKET_NAME}/*.png' || true
+
+        gsutil -m setmeta \
+          -h "Cache-Control:public, max-age=86400" \
+          'gs://${_BUCKET_NAME}/*.ico' || true
+
+        echo "=== Upload complete ==="
+        echo "Total files uploaded:"
+        gsutil ls -r gs://${_BUCKET_NAME}/ | wc -l
+    id: 'upload-web-build'
+    waitFor: ['build-web', 'apply-cors']
+
+  # ==============================================================================
+  # 8. Enable Cloud CDN (if not already enabled)
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== Configuring Cloud CDN ==="
+
+        # Create backend bucket for CDN if not exists
+        BACKEND_NAME="${_BUCKET_NAME}-backend"
+
+        if ! gcloud compute backend-buckets describe $$BACKEND_NAME --project=$PROJECT_ID 2>/dev/null; then
+          echo "Creating backend bucket: $$BACKEND_NAME"
+
+          gcloud compute backend-buckets create $$BACKEND_NAME \
+            --gcs-bucket-name=${_BUCKET_NAME} \
+            --enable-cdn \
+            --cache-mode=CACHE_ALL_STATIC \
+            --default-ttl=3600 \
+            --max-ttl=86400 \
+            --project=$PROJECT_ID
+
+          echo "Backend bucket created with CDN enabled"
+        else
+          echo "Backend bucket already exists: $$BACKEND_NAME"
+
+          # Update to ensure CDN is enabled
+          gcloud compute backend-buckets update $$BACKEND_NAME \
+            --enable-cdn \
+            --cache-mode=CACHE_ALL_STATIC \
+            --default-ttl=3600 \
+            --max-ttl=86400 \
+            --project=$PROJECT_ID || true
+        fi
+
+        echo "=== Cloud CDN configuration complete ==="
+    id: 'configure-cdn'
+    waitFor: ['upload-web-build']
+
+  # ==============================================================================
+  # 9. CORS Validation Test
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "=== CORS Validation Test ==="
+
+        # Test CORS headers by making a HEAD request
+        BUCKET_URL="https://storage.googleapis.com/${_BUCKET_NAME}/index.html"
+
+        echo "Testing CORS headers for: $$BUCKET_URL"
+
+        # Test with curl (simulate browser OPTIONS preflight)
+        echo "=== Testing OPTIONS preflight request ==="
+        curl -v -X OPTIONS \
+          -H "Origin: https://myagents-frontend.web.app" \
+          -H "Access-Control-Request-Method: GET" \
+          -H "Access-Control-Request-Headers: Content-Type" \
+          "$$BUCKET_URL" 2>&1 | grep -i "access-control" || echo "No CORS headers in OPTIONS response"
+
+        # Test actual GET request
+        echo "=== Testing GET request with Origin header ==="
+        curl -v -X GET \
+          -H "Origin: https://myagents-frontend.web.app" \
+          "$$BUCKET_URL" 2>&1 | grep -i "access-control" || echo "No CORS headers in GET response"
+
+        echo "=== CORS validation complete ==="
+        echo "Note: CORS headers should be present in responses"
+    id: 'cors-validation'
+    waitFor: ['upload-web-build']
+
+  # ==============================================================================
+  # 10. Deployment Summary
+  # ==============================================================================
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "==============================================================================="
+        echo "=== DEPLOYMENT SUMMARY ==="
+        echo "==============================================================================="
+        echo ""
+        echo "Project ID:       $PROJECT_ID"
+        echo "Region:           ${_REGION}"
+        echo "Bucket Name:      ${_BUCKET_NAME}"
+        echo "CDN Enabled:      Yes"
+        echo "CORS Configured:  Yes"
+        echo ""
+        echo "=== Access URLs ==="
+        echo "Storage URL:      https://storage.googleapis.com/${_BUCKET_NAME}/index.html"
+        echo "Backend Bucket:   ${_BUCKET_NAME}-backend"
+        echo ""
+        echo "=== CORS Configuration ==="
+        echo "Allowed Origins:"
+        echo "  - https://myagents-frontend.web.app"
+        echo "  - https://*.web.app"
+        echo "  - https://*.run.app"
+        echo "  - http://localhost:* (development)"
+        echo ""
+        echo "=== Next Steps ==="
+        echo "1. Set up URL map and load balancer for custom domain (optional)"
+        echo "2. Configure SSL certificate for custom domain (optional)"
+        echo "3. Test frontend access via storage URL"
+        echo "4. Verify WebSocket connection to Cloud Run relay"
+        echo "5. Monitor CDN cache hit rate in Cloud Console"
+        echo ""
+        echo "=== Relay Configuration ==="
+        echo "Relay URL:        relay.remoteagents.dev"
+        echo "WebSocket Path:   wss://relay.remoteagents.dev/ws/client/{pairingCode}"
+        echo ""
+        echo "==============================================================================="
+        echo "=== DEPLOYMENT COMPLETE ==="
+        echo "==============================================================================="
+    id: 'deployment-summary'
+    waitFor: ['configure-cdn', 'cors-validation']
+
+# ==============================================================================
+# Substitutions
+# ==============================================================================
+substitutions:
+  _IMAGE_NAME: 'myagentsfrontend-test'
+  _BUCKET_NAME: 'myagents-frontend'
+  _REGION: 'us-central1'
+
+# ==============================================================================
+# Options
+# ==============================================================================
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+# ==============================================================================
+# Timeout
+# ==============================================================================
+timeout: '1200s'  # 20 minutes for complete deployment

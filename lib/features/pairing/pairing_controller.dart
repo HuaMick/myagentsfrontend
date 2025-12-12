@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../core/config/environment_config.dart';
 import '../../core/crypto/key_pair.dart';
 import '../../core/networking/relay_client.dart';
 import 'pairing_state.dart';
@@ -96,9 +97,13 @@ class PairingController extends ChangeNotifier {
   /// 2. Sets state to connecting
   /// 3. Generates a new client key pair
   /// 4. Creates a RelayClient instance
-  /// 5. Connects to wss://relay.remoteagents.dev/ws/client/{pairingCode}
+  /// 5. Connects to relay server (URL determined by EnvironmentConfig)
   /// 6. On success: Sets state to connected, stores RelayClient
   /// 7. On error: Sets state to error with appropriate error message
+  ///
+  /// Relay server URLs by environment:
+  /// - Development: ws://localhost:8080/ws/client/{pairingCode}
+  /// - Production: wss://relay.remoteagents.dev/ws/client/{pairingCode}
   ///
   /// Error handling:
   /// - Invalid pairing code (404): "Invalid pairing code"
@@ -126,9 +131,11 @@ class PairingController extends ChangeNotifier {
       // Create RelayClient instance with generated keys
       _relayClient = RelayClient();
 
-      // Connect to relay server
-      // URL format: wss://relay.remoteagents.dev/ws/client/{pairingCode}
-      const relayUrl = 'relay.remoteagents.dev';
+      // Get relay URL from environment configuration
+      // Development: localhost:8080 (ws://)
+      // Production: relay.remoteagents.dev (wss://)
+      final config = EnvironmentConfig.current;
+      final relayUrl = config.relayUrl;
       await _relayClient!.connect(relayUrl, _state.pairingCode);
 
       // Connection successful - update state
